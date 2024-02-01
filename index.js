@@ -1,85 +1,58 @@
-const express = require("express")
-const {Pool} = require('pg')
+const express = require("express");
+const { Pool } = require("pg");
+const cors = require("cors");
 
 const app = express();
-const port = 8080;
-
+const PORT = 8080;
 
 const pool = new Pool({
-  user:"postgres",
-  host:"localhost",
-  database:"movies",
-  password:"vinit123",
-  port:5432,
-})
+  user: "postgres",
+  host: "localhost",
+  database: "movies",
+  password: "vinit123",
+  port: 5432,
+});
 
+// Use the cors middleware
+app.use(cors());
+// Parse JSON bodies
+app.use(express.json());
 
-const newData = {
-  first_name: 'John',
-  last_name: 'Doe',
-  birth_date: '1990-01-01',
-  hire_date: '2022-01-01',
-  salary: 60000,
-};
-
-const insertQuery = 'INSERT INTO employees (first_name, last_name, birth_date, hire_date, salary) VALUES ($1, $2, $3, $4, $5) RETURNING *';
-
-
-// SQL query for inserting data
-
-// Use a pool to connect to the database
-pool.connect((err, client, done) => {
-  if (err) {
-    console.error('Error connecting to the database', err);
-    return;
+app.get("/", async (req, res) => {
+  try {
+    const allmovies = await pool.query("SELECT * FROM movies");
+    res.json(allmovies.rows);
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({ error: "Internal Server Error" });
   }
-
-  // Use a transaction to handle the query
-  client.query('BEGIN', (err) => {
-    if (err) {
-      console.error('Error beginning transaction', err);
-      done();
-      return;
-    }
-
-    // Execute the insert query with parameters
-    client.query(insertQuery, [
-      newData.first_name,
-      newData.last_name,
-      newData.birth_date,
-      newData.hire_date,
-      newData.salary,
-    ], (err, result) => {
-      if (err) {
-        console.error('Error executing insert query', err);
-        client.query('ROLLBACK', done);
-      } else {
-        // Commit the transaction
-        client.query('COMMIT', (err) => {
-          if (err) {
-            console.error('Error committing transaction', err);
-          } else {
-            console.log('Data inserted successfully:', result.rows[0]);
-          }
-          done();
-        });
-      }
-    });
-  });
 });
 
-app.get('/', (req, res) => {
-  pool.query('SELECT * FROM employees', (err, result) => {
-    if (err) {
-      console.error('Error executing SELECT query', err);
-      res.status(500).send('Internal Server Error');
-    } else {
-      const employees = result.rows;
-      res.render('index', { employees });
-    }
-  });
+app.post("/addMovies", async (req, res) => {
+  const { title, release_year, director_id, img_url } = req.body;
+  
+  // Check if title is provided
+  if (!title) {
+    return res.status(400).json({ error: "Title is required" });
+  }
+  
+  try {
+    const newMovie = await pool.query(
+      "INSERT INTO movies (title, release_year, director_id, img_url) VALUES ($1, $2, $3, $4) RETURNING *",
+      [title, release_year, director_id, img_url]
+    );
+    res.status(201).json(newMovie.rows[0]);
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
 });
+
+
+
+app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+
 // Close the pool when the process exits
-process.on('exit', () => {
+process.on("exit", () => {
   pool.end();
 });
